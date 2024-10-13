@@ -253,7 +253,36 @@ pub mod parse {
 }
 
 #[cfg(feature = "simd")]
-mod parse_simd {}
+pub mod parse_simd {
+    use std::{
+        ops::Neg,
+        simd::{cmp::SimdPartialEq, num::SimdInt, Mask, Simd},
+    };
+
+    use crate::parse::NumberedBlock;
+
+    const N: usize = 32;
+    type Wide = Simd<u8, N>;
+    // type WideMask = Mask<i8, N>;
+    pub fn parse_template(input: &[u8]) -> usize /* Vec<NumberedBlock<'_>> */ {
+        // input.iter().filter(|&&x| x == b'\n').count()
+        let mut i = 0;
+        let mut line_number = 0usize;
+
+        let nl = Wide::splat(b'\n');
+        while i < input.len() {
+            let cs = Wide::load_or_default(&input[i..]);
+
+            // let newlines = cs.simd_eq(Wide::splat(b'\n')).to_bitmask().count_ones();
+            let newlines = cs.simd_eq(nl).to_int().reduce_sum().neg();
+            line_number += newlines as usize;
+
+            i += N;
+        }
+
+        line_number
+    }
+}
 
 pub struct ParsedTemplate<'a> {
     parsed: Vec<NumberedBlock<'a>>,

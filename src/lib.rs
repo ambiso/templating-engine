@@ -45,6 +45,7 @@ pub mod parse {
         Special(Special<'a>),
         Plain(&'a [u8]), // plain text region without any separators
     }
+
     /// Match a left and right delimited section
     /// For example `"{{ hello }}"`` will turn into `result(" hello ")`
     fn parse_special_with_separator(

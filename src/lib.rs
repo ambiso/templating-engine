@@ -2,10 +2,6 @@ use std::io::Write;
 
 use parse::{parse_template, Block};
 
-pub struct ParsedTemplate<'a> {
-    parsed: Vec<Block<'a>>,
-}
-
 pub mod parse {
     use nom::{
         branch::alt,
@@ -126,6 +122,10 @@ pub mod parse {
     }
 }
 
+pub struct ParsedTemplate<'a> {
+    parsed: Vec<Block<'a>>,
+}
+
 impl<'a> ParsedTemplate<'a> {
     pub fn new(template: &'a [u8]) -> Option<Self> {
         parse_template(&template)
@@ -133,6 +133,7 @@ impl<'a> ParsedTemplate<'a> {
             .filter(|x| x.0.len() == 0)
             .map(|(_, parsed)| Self { parsed })
     }
+
     pub fn instantiate(&self, wr: &mut impl Write) -> Result<(), std::io::Error> {
         for ins in self.parsed.iter() {
             match ins {

@@ -264,21 +264,37 @@ pub mod parse_simd {
     const N: usize = 32;
     type Wide = Simd<u8, N>;
     // type WideMask = Mask<i8, N>;
+    // pub fn parse_template(input: &[u8]) -> usize /* Vec<NumberedBlock<'_>> */ {
+    //     // input.iter().filter(|&&x| x == b'\n').count()
+    //     let mut i = 0;
+    //     let mut line_number = 0usize;
+
+    //     let nl = Wide::splat(b'\n');
+    //     while i < input.len() {
+    //         let cs = Wide::load_or_default(&input[i..]);
+
+    //         // let newlines = cs.simd_eq(Wide::splat(b'\n')).to_bitmask().count_ones();
+    //         let newlines = cs.simd_eq(nl).to_int().reduce_sum().neg();
+    //         line_number += newlines as usize;
+
+    //         i += N;
+    //     }
+
+    //     line_number
+    // }
     pub fn parse_template(input: &[u8]) -> usize /* Vec<NumberedBlock<'_>> */ {
         // input.iter().filter(|&&x| x == b'\n').count()
-        let mut i = 0;
         let mut line_number = 0usize;
 
-        let nl = Wide::splat(b'\n');
-        while i < input.len() {
-            let cs = Wide::load_or_default(&input[i..]);
+        let (head, middle, tail) = unsafe { input.align_to::<Wide>() };
 
+        line_number += head.iter().filter(|&&x| x == b'\n').count();
+        for c in middle.iter() {
             // let newlines = cs.simd_eq(Wide::splat(b'\n')).to_bitmask().count_ones();
-            let newlines = cs.simd_eq(nl).to_int().reduce_sum().neg();
+            let newlines = c.simd_eq(Wide::splat(b'\n')).to_int().reduce_sum().neg();
             line_number += newlines as usize;
-
-            i += N;
         }
+        line_number += tail.iter().filter(|&&x| x == b'\n').count();
 
         line_number
     }

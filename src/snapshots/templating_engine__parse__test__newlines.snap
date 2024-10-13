@@ -1,0 +1,32 @@
+---
+source: src/lib.rs
+expression: "parse_template(b\"{{\\n\\n}}\\n\\nfoo\")"
+---
+Ok(
+    (
+        NumberedInput {
+            line_number: 4,
+            i: [],
+        },
+        [
+            NumberedBlock {
+                line_number: 0,
+                block: Special(
+                    TagCurly(
+                        Ok(
+                            "",
+                        ),
+                    ),
+                ),
+            },
+            NumberedBlock {
+                line_number: 2,
+                block: Plain(
+                    Ok(
+                        "\n\nfoo",
+                    ),
+                ),
+            },
+        ],
+    ),
+)

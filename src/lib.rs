@@ -43,7 +43,7 @@ pub mod parse {
     }
 
     /// Match a left and right delimited section
-    /// For example `"{{ hello }}"`` will turn into `result(" hello ")`
+    /// For example `"{{ hello }}"` will turn into `result(" hello ")`
     fn parse_special_with_separator(
         left_sep: &'static [u8],
         right_sep: &'static [u8],

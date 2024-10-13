@@ -242,6 +242,13 @@ pub mod parse {
             assert_debug_snapshot!(parse_template(b"{% #} %}"));
             assert_debug_snapshot!(parse_template(b"{# #} #}"));
         }
+
+        #[test]
+        fn test_newlines() {
+            assert_debug_snapshot!(parse_template(b"{{\n\n}}\n\nfoo"));
+            assert_debug_snapshot!(parse_template(b"\n\n{{\n\n}}\n\nfoo"));
+            assert_debug_snapshot!(parse_template(b"\n\nbar{{\n bar \n}}\n\nfoo"));
+        }
     }
 }
 

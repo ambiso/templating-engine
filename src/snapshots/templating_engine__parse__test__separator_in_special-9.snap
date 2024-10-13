@@ -4,15 +4,21 @@ expression: "parse_template(b\"{# {# #}\")"
 ---
 Ok(
     (
-        [],
+        NumberedInput {
+            line_number: 0,
+            i: [],
+        },
         [
-            Special(
-                TagHash(
-                    Ok(
-                        "{#",
+            NumberedBlock {
+                line_number: 0,
+                block: Special(
+                    TagHash(
+                        Ok(
+                            "{#",
+                        ),
                     ),
                 ),
-            ),
+            },
         ],
     ),
 )

@@ -4,15 +4,21 @@ expression: "parse_template(b\"{% #} %}\")"
 ---
 Ok(
     (
-        [],
+        NumberedInput {
+            line_number: 0,
+            i: [],
+        },
         [
-            Special(
-                TagPercent(
-                    Ok(
-                        "#}",
+            NumberedBlock {
+                line_number: 0,
+                block: Special(
+                    TagPercent(
+                        Ok(
+                            "#}",
+                        ),
                     ),
                 ),
-            ),
+            },
         ],
     ),
 )

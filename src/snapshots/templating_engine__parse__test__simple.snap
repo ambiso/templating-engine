@@ -4,15 +4,21 @@ expression: "parse_template(b\"{{ hello }}\")"
 ---
 Ok(
     (
-        [],
+        NumberedInput {
+            line_number: 0,
+            i: [],
+        },
         [
-            Special(
-                TagCurly(
-                    Ok(
-                        "hello",
+            NumberedBlock {
+                line_number: 0,
+                block: Special(
+                    TagCurly(
+                        Ok(
+                            "hello",
+                        ),
                     ),
                 ),
-            ),
+            },
         ],
     ),
 )

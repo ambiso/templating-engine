@@ -5,10 +5,13 @@ expression: "parse_template(b\"{# #} #}\")"
 Err(
     Failure(
         Error {
-            input: [
-                35,
-                125,
-            ],
+            input: NumberedInput {
+                line_number: 0,
+                i: [
+                    35,
+                    125,
+                ],
+            },
             code: Tag,
         },
     ),

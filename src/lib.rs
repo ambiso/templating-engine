@@ -16,6 +16,23 @@ pub mod parse {
         IResult, InputTake, Parser,
     };
 
+    pub fn parse_template(input: &[u8]) -> IResult<&[u8], Vec<Block<'_>>> {
+        let percent =
+            parse_special_with_separator(b"{%", b"%}", |x| Special::TagPercent(x.trim_ascii()))
+                .map(|x| Block::Special(x));
+        let curly =
+            parse_special_with_separator(b"{{", b"}}", |x| Special::TagCurly(x.trim_ascii()))
+                .map(|x| Block::Special(x));
+        let hash = parse_special_with_separator(b"{#", b"#}", |x| Special::TagHash(x.trim_ascii()))
+            .map(|x| Block::Special(x));
+        many0(
+            alt((percent, curly, hash, plain.map(|x| Block::Plain(x)))).map(|x| {
+                dbg!(&x);
+                x
+            }),
+        )(input)
+    }
+
     #[derive(Clone, Copy)]
     pub enum Special<'a> {
         TagPercent(&'a [u8]), // {% %}
@@ -23,44 +40,13 @@ pub mod parse {
         TagHash(&'a [u8]),    // {# #}
     }
 
-    // manual impls for Debug to show utf-8 parsed result
-    impl<'a> std::fmt::Debug for Special<'a> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                Self::TagPercent(arg0) => f
-                    .debug_tuple("TagPercent")
-                    .field(&std::str::from_utf8(arg0))
-                    .finish(),
-                Self::TagCurly(arg0) => f
-                    .debug_tuple("TagCurly")
-                    .field(&std::str::from_utf8(arg0))
-                    .finish(),
-                Self::TagHash(arg0) => f
-                    .debug_tuple("TagHash")
-                    .field(&std::str::from_utf8(arg0))
-                    .finish(),
-            }
-        }
-    }
-
     #[derive(Clone, Copy)]
     pub enum Block<'a> {
         Special(Special<'a>),
-        Plain(&'a [u8]),
+        Plain(&'a [u8]), // plain text region without any separators
     }
-
-    impl<'a> std::fmt::Debug for Block<'a> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                Self::Special(arg0) => f.debug_tuple("Special").field(arg0).finish(),
-                Self::Plain(arg0) => f
-                    .debug_tuple("Plain")
-                    .field(&std::str::from_utf8(arg0))
-                    .finish(),
-            }
-        }
-    }
-
+    /// Match a left and right delimited section
+    /// For example `"{{ hello }}"`` will turn into `result(" hello ")`
     fn parse_special_with_separator(
         left_sep: &'static [u8],
         right_sep: &'static [u8],
@@ -73,6 +59,7 @@ pub mod parse {
         }
     }
 
+    /// match any separator
     fn any_separator(input: &[u8]) -> IResult<&[u8], &[u8]> {
         alt((
             tag("{{"),
@@ -84,6 +71,7 @@ pub mod parse {
         ))(input)
     }
 
+    /// parse plain text until any separator occurs
     fn plain(input: &[u8]) -> IResult<&[u8], &[u8]> {
         for i in 0..input.len() {
             if any_separator(&input[i..]).is_ok() {
@@ -103,21 +91,37 @@ pub mod parse {
         Ok(input.take_split(input.len()))
     }
 
-    pub fn parse_template(input: &[u8]) -> IResult<&[u8], Vec<Block<'_>>> {
-        let percent =
-            parse_special_with_separator(b"{%", b"%}", |x| Special::TagPercent(x.trim_ascii()))
-                .map(|x| Block::Special(x));
-        let curly =
-            parse_special_with_separator(b"{{", b"}}", |x| Special::TagCurly(x.trim_ascii()))
-                .map(|x| Block::Special(x));
-        let hash = parse_special_with_separator(b"{#", b"#}", |x| Special::TagHash(x.trim_ascii()))
-            .map(|x| Block::Special(x));
-        many0(
-            alt((percent, curly, hash, plain.map(|x| Block::Plain(x)))).map(|x| {
-                dbg!(&x);
-                x
-            }),
-        )(input)
+    // Manual impls for Debug to show utf-8 parsed result
+    impl<'a> std::fmt::Debug for Special<'a> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Self::TagPercent(arg0) => f
+                    .debug_tuple("TagPercent")
+                    .field(&std::str::from_utf8(arg0))
+                    .finish(),
+                Self::TagCurly(arg0) => f
+                    .debug_tuple("TagCurly")
+                    .field(&std::str::from_utf8(arg0))
+                    .finish(),
+                Self::TagHash(arg0) => f
+                    .debug_tuple("TagHash")
+                    .field(&std::str::from_utf8(arg0))
+                    .finish(),
+            }
+        }
+    }
+
+    // Manual impls for Debug to show utf-8 parsed result
+    impl<'a> std::fmt::Debug for Block<'a> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Self::Special(arg0) => f.debug_tuple("Special").field(arg0).finish(),
+                Self::Plain(arg0) => f
+                    .debug_tuple("Plain")
+                    .field(&std::str::from_utf8(arg0))
+                    .finish(),
+            }
+        }
     }
 }
 

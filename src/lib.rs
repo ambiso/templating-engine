@@ -1,6 +1,8 @@
+#![feature(portable_simd)]
+
 use std::io::Write;
 
-use parse::{parse_template, Block};
+use parse::{parse_template, Block, NumberedBlock};
 
 pub mod parse {
     use nom::{
@@ -9,24 +11,78 @@ pub mod parse {
         error::{Error, ErrorKind},
         multi::many0,
         sequence::tuple,
-        IResult, InputTake, Parser,
+        IResult, InputLength, InputTake, Parser,
     };
 
-    pub fn parse_template(input: &[u8]) -> IResult<&[u8], Vec<Block<'_>>> {
-        let percent =
-            parse_special_with_separator(b"{%", b"%}", |x| Special::TagPercent(x.trim_ascii()))
-                .map(|x| Block::Special(x));
-        let curly =
-            parse_special_with_separator(b"{{", b"}}", |x| Special::TagCurly(x.trim_ascii()))
-                .map(|x| Block::Special(x));
-        let hash = parse_special_with_separator(b"{#", b"#}", |x| Special::TagHash(x.trim_ascii()))
-            .map(|x| Block::Special(x));
-        many0(
-            alt((percent, curly, hash, plain.map(|x| Block::Plain(x)))).map(|x| {
-                dbg!(&x);
-                x
-            }),
-        )(input)
+    #[derive(Clone, Debug)]
+    pub struct NumberedInput<'a> {
+        pub line_number: usize,
+        pub i: &'a [u8],
+    }
+
+    impl<'a> InputLength for NumberedInput<'a> {
+        fn input_len(&self) -> usize {
+            self.i.input_len()
+        }
+    }
+    fn make_special_parser<'a>(
+        left_sep: &'static [u8],
+        right_sep: &'static [u8],
+        constructor: fn(&'a [u8]) -> Special<'a>,
+    ) -> impl Fn(NumberedInput<'a>) -> IResult<NumberedInput<'a>, NumberedBlock<'a>> {
+        move |ni: NumberedInput<'a>| {
+            parse_special_with_separator(left_sep, right_sep, ni.i)
+                .map(|(rest, result)| {
+                    (
+                        NumberedInput {
+                            line_number: ni.line_number
+                                + result.iter().filter(|&&x| x == b'\n').count(),
+                            i: rest,
+                        },
+                        NumberedBlock {
+                            line_number: ni.line_number,
+                            block: Block::Special(constructor(result.trim_ascii())),
+                        },
+                    )
+                })
+                .map_err(|e| match e {
+                    nom::Err::Incomplete(needed) => nom::Err::Incomplete(needed),
+                    nom::Err::Error(e) => nom::Err::Error(nom::error::Error::new(
+                        NumberedInput {
+                            line_number: ni.line_number,
+                            i: e.input,
+                        },
+                        e.code,
+                    )),
+                    nom::Err::Failure(e) => nom::Err::Failure(nom::error::Error::new(
+                        NumberedInput {
+                            line_number: ni.line_number,
+                            i: e.input,
+                        },
+                        e.code,
+                    )),
+                })
+        }
+    }
+
+    pub fn parse_template<'a>(
+        input: &'a [u8],
+    ) -> IResult<NumberedInput<'a>, Vec<NumberedBlock<'a>>> {
+        let percent = make_special_parser(b"{%", b"%}", Special::TagPercent);
+        let curly = make_special_parser(b"{{", b"}}", Special::TagCurly);
+        let hash = make_special_parser(b"{#", b"#}", Special::TagHash);
+
+        let plain_parser = plain.map(|x| NumberedBlock {
+            line_number: x.line_number,
+            block: Block::Plain(x.i),
+        });
+
+        let block_parser = alt((percent, curly, hash, plain_parser));
+
+        many0(block_parser)(NumberedInput {
+            line_number: 0,
+            i: input,
+        })
     }
 
     #[derive(Clone, Copy)]
@@ -42,18 +98,22 @@ pub mod parse {
         Plain(&'a [u8]), // plain text region without any separators
     }
 
+    #[derive(Clone, Copy, Debug)]
+    pub struct NumberedBlock<'a> {
+        pub line_number: usize,
+        pub block: Block<'a>,
+    }
+
     /// Match a left and right delimited section
     /// For example `"{{ hello }}"` will turn into `result(" hello ")`
-    fn parse_special_with_separator(
+    fn parse_special_with_separator<'a>(
         left_sep: &'static [u8],
         right_sep: &'static [u8],
-        result: impl for<'c> Fn(&'c [u8]) -> Special<'c>,
-    ) -> impl for<'c> Fn(&'c [u8]) -> IResult<&'c [u8], Special<'c>> {
-        move |input: &[u8]| {
-            tuple((tag(left_sep), take_until(right_sep), tag(right_sep)))
-                .map(|(_l, m, _r)| result(m))
-                .parse(input)
-        }
+        input: &'a [u8],
+    ) -> IResult<&'a [u8], &'a [u8]> {
+        tuple((tag(left_sep), take_until(right_sep), tag(right_sep)))
+            .map(|(_l, m, _r)| m)
+            .parse(input)
     }
 
     /// match any separator
@@ -69,9 +129,10 @@ pub mod parse {
     }
 
     /// parse plain text until any separator occurs
-    fn plain(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        for i in 0..input.len() {
-            if any_separator(&input[i..]).is_ok() {
+    fn plain(input: NumberedInput<'_>) -> IResult<NumberedInput<'_>, NumberedInput<'_>> {
+        let mut line_number = input.line_number;
+        for i in 0..input.i.len() {
+            if any_separator(&input.i[i..]).is_ok() {
                 // must not parse any separators as part of raw output
                 if i == 0 {
                     return Err(nom::Err::Failure(nom::error::Error::new(
@@ -79,13 +140,36 @@ pub mod parse {
                         ErrorKind::Tag,
                     )));
                 }
-                return Ok(input.take_split(i));
+                let (rest, parsed) = input.i.take_split(i);
+                return Ok((
+                    NumberedInput {
+                        line_number,
+                        i: rest,
+                    },
+                    NumberedInput {
+                        line_number: input.line_number,
+                        i: parsed,
+                    },
+                ));
+            }
+            if input.i[i] == b'\n' {
+                line_number += 1;
             }
         }
-        if input.len() == 0 {
+        if input.i.len() == 0 {
             return Err(nom::Err::Error(Error::new(input, ErrorKind::Fail)));
         }
-        Ok(input.take_split(input.len()))
+        let (rest, parsed) = input.i.take_split(input.i.len());
+        Ok((
+            NumberedInput {
+                line_number,
+                i: rest,
+            },
+            NumberedInput {
+                line_number: input.line_number,
+                i: parsed,
+            },
+        ))
     }
 
     // Manual impls for Debug to show utf-8 parsed result
@@ -161,21 +245,24 @@ pub mod parse {
     }
 }
 
+#[cfg(feature = "simd")]
+mod parse_simd {}
+
 pub struct ParsedTemplate<'a> {
-    parsed: Vec<Block<'a>>,
+    parsed: Vec<NumberedBlock<'a>>,
 }
 
 impl<'a> ParsedTemplate<'a> {
     pub fn new(template: &'a [u8]) -> Option<Self> {
         parse_template(&template)
             .ok()
-            .filter(|x| x.0.len() == 0)
+            .filter(|x| x.0.i.len() == 0)
             .map(|(_, parsed)| Self { parsed })
     }
 
     pub fn instantiate(&self, wr: &mut impl Write) -> Result<(), std::io::Error> {
         for ins in self.parsed.iter() {
-            match ins {
+            match ins.block {
                 Block::Plain(x) => wr.write_all(x)?,
                 Block::Special(s) => match s {
                     parse::Special::TagPercent(s) => wr.write_all(s)?,

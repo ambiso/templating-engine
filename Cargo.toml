@@ -3,6 +3,9 @@ name = "templating-engine"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+simd = []
+
 [dependencies]
 nom = "7.1.3"
 

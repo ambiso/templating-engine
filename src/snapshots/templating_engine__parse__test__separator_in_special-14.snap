@@ -1,0 +1,15 @@
+---
+source: src/lib.rs
+expression: "parse_template(b\"{% %} %}\")"
+---
+Err(
+    Failure(
+        Error {
+            input: [
+                37,
+                125,
+            ],
+            code: Tag,
+        },
+    ),
+)

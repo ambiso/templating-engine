@@ -120,6 +120,45 @@ pub mod parse {
             }
         }
     }
+
+    #[cfg(test)]
+    mod test {
+        use insta::assert_debug_snapshot;
+
+        use crate::parse::parse_template;
+
+        #[test]
+        fn test_simple() {
+            assert_debug_snapshot!(parse_template(b"{{ hello }}"));
+        }
+
+        #[test]
+        fn test_separator_in_special() {
+            assert_debug_snapshot!(parse_template(b"{{ {{ }}"));
+            assert_debug_snapshot!(parse_template(b"{% {{ %}"));
+            assert_debug_snapshot!(parse_template(b"{# {{ #}"));
+
+            assert_debug_snapshot!(parse_template(b"{{ {% }}"));
+            assert_debug_snapshot!(parse_template(b"{% {% %}"));
+            assert_debug_snapshot!(parse_template(b"{# {% #}"));
+
+            assert_debug_snapshot!(parse_template(b"{{ {# }}"));
+            assert_debug_snapshot!(parse_template(b"{% {# %}"));
+            assert_debug_snapshot!(parse_template(b"{# {# #}"));
+
+            assert_debug_snapshot!(parse_template(b"{{ }} }}"));
+            assert_debug_snapshot!(parse_template(b"{% }} %}"));
+            assert_debug_snapshot!(parse_template(b"{# }} #}"));
+
+            assert_debug_snapshot!(parse_template(b"{{ %} }}"));
+            assert_debug_snapshot!(parse_template(b"{% %} %}"));
+            assert_debug_snapshot!(parse_template(b"{# %} #}"));
+
+            assert_debug_snapshot!(parse_template(b"{{ #} }}"));
+            assert_debug_snapshot!(parse_template(b"{% #} %}"));
+            assert_debug_snapshot!(parse_template(b"{# #} #}"));
+        }
+    }
 }
 
 pub struct ParsedTemplate<'a> {
